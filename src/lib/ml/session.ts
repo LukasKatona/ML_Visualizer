@@ -2,19 +2,43 @@
  * Decision-boundary visualizer state, URL codec and training session.
  */
 import { Rng } from '../math/rng.ts';
-import { DATASETS, isDatasetId, type DatasetId, type Points } from './datasets.ts';
+import { DATASETS, DOMAIN, isDatasetId, type DatasetId, type Points } from './datasets.ts';
 import { Knn } from './knn.ts';
 import { Mlp, type Activation } from './mlp.ts';
 import { VEC_DEFAULTS, VecOptimizer, type VecOptimizerId } from './optim.ts';
-import { DecisionTree } from './tree.ts';
+import { TreeGrower, type SplitSeg } from './tree.ts';
 
 export type ModelId = 'logreg' | 'mlp' | 'knn' | 'tree';
 
-export const MODELS: Record<ModelId, { name: string; trainable: boolean }> = {
-	logreg: { name: 'Logistic regression', trainable: true },
-	mlp: { name: 'Neural network (MLP)', trainable: true },
-	knn: { name: 'k-nearest neighbours', trainable: false },
-	tree: { name: 'Decision tree', trainable: false }
+export interface ModelMeta {
+	name: string;
+	/** Gradient-trained (has loss, optimizer, epochs). */
+	trainable: boolean;
+	/** Transport labels and the unit of one step. */
+	labels: { play: string; step: string; reset: string; unit: string };
+}
+
+export const MODELS: Record<ModelId, ModelMeta> = {
+	logreg: {
+		name: 'Logistic regression',
+		trainable: true,
+		labels: { play: 'Train', step: 'Step', reset: 'Re-init', unit: 'Epoch' }
+	},
+	mlp: {
+		name: 'Neural network (MLP)',
+		trainable: true,
+		labels: { play: 'Train', step: 'Step', reset: 'Re-init', unit: 'Epoch' }
+	},
+	knn: {
+		name: 'k-nearest neighbours',
+		trainable: false,
+		labels: { play: 'Replay', step: 'Store point', reset: 'Empty', unit: 'Stored points' }
+	},
+	tree: {
+		name: 'Decision tree',
+		trainable: false,
+		labels: { play: 'Grow', step: 'Split', reset: 'Root only', unit: 'Splits' }
+	}
 };
 
 export const MODEL_IDS = Object.keys(MODELS) as ModelId[];
@@ -100,15 +124,10 @@ export function encodeDb(s: DbState): string {
 		if (s.model === 'mlp') {
 			q.push(['L', String(s.layers)], ['w', String(s.width)], ['act', s.activation]);
 		}
-		q.push(
-			['opt', s.optimizer],
-			['lr', fmt(s.lr)],
-			['l2', fmt(s.l2)],
-			['v', String(s.speed)],
-			['E', String(s.maxEpochs)]
-		);
+		q.push(['opt', s.optimizer], ['lr', fmt(s.lr)], ['l2', fmt(s.l2)], ['E', String(s.maxEpochs)]);
 	} else if (s.model === 'knn') q.push(['k', String(s.k)]);
 	else q.push(['dep', String(s.maxDepth)]);
+	q.push(['v', String(s.speed)]);
 	if (s.extra.length)
 		q.push(['pts', s.extra.map(([x, y, c]) => `${r2(x)},${r2(y)},${c}`).join(';')]);
 	return q.map(([k, v]) => `${k}=${v}`).join('&');
@@ -177,26 +196,63 @@ export interface Predictor {
 	predict(x: number, y: number): number;
 }
 
+/** Optional visual hooks a predictor may provide to the canvas. */
+export interface SplitSource {
+	splits: SplitSeg[];
+}
+export interface NeighbourSource {
+	kEff: number;
+	data: Points;
+	neighbors(x: number, y: number, out: Int32Array): number;
+}
+
+export const hasSplits = (p: Predictor): p is Predictor & SplitSource => 'splits' in p;
+export const hasNeighbours = (p: Predictor): p is Predictor & NeighbourSource => 'neighbors' in p;
+
 export type SessionStatus = 'idle' | 'training' | 'done' | 'diverged';
 
+/** Non-gradient models built step by step: k-NN stores one point per step, trees add one split. */
+interface Stepper {
+	reset(): void;
+	step(): boolean;
+	finish(): void;
+}
+
+class KnnStepper implements Stepper {
+	constructor(readonly knn: Knn) {}
+	reset() {
+		this.knn.size = 0;
+	}
+	step() {
+		if (this.knn.size >= this.knn.data.n) return false;
+		this.knn.size++;
+		return true;
+	}
+	finish() {
+		this.knn.size = this.knn.data.n;
+	}
+}
+
 /**
- * Wraps a model with its data. Trainable models record per-epoch metrics into preallocated
- * buffers; k-NN and trees are fitted in the constructor.
+ * Wraps a model with its data and records per-step metrics into preallocated buffers.
+ * Gradient-trained models start at initialisation (step 0). Steppers (k-NN, tree) start fully
+ * fitted with no history; reset() rewinds them to step 0 so they can be replayed.
  */
 export class Session {
 	readonly trainable: boolean;
 	readonly predictor: Predictor;
 	readonly mlp: Mlp | null = null;
 	private readonly opt: VecOptimizer | null = null;
+	private readonly stepper: Stepper | null = null;
+	private readonly knn: Knn | null = null;
+	private readonly tree: TreeGrower | null = null;
 	private readonly seed: number;
 	readonly loss: Float64Array;
 	readonly trainAcc: Float64Array;
 	readonly testAcc: Float64Array;
-	/** Number of recorded epochs (epoch 0 = initialisation). */
+	/** Number of recorded steps (index 0 = initial state). */
 	count = 0;
 	status: SessionStatus = 'idle';
-	/** Extra info for non-trainable models (tree leaves / depth). */
-	readonly info: string;
 
 	constructor(
 		readonly st: DbState,
@@ -204,18 +260,28 @@ export class Session {
 		readonly test: Points
 	) {
 		this.seed = st.seed;
-		const cap = st.maxEpochs + 1;
-		this.loss = new Float64Array(cap);
+		this.trainable = MODELS[st.model].trainable;
+		// capacity: epochs for gradient models; at most n stored points / n − 1 splits otherwise
+		const cap = (this.trainable ? st.maxEpochs : train.n) + 1;
+		this.loss = new Float64Array(this.trainable ? cap : 0);
 		this.trainAcc = new Float64Array(cap);
 		this.testAcc = new Float64Array(cap);
-		this.trainable = MODELS[st.model].trainable;
 		if (st.model === 'knn') {
-			this.predictor = new Knn(train, st.k);
-			this.info = `k = ${Math.min(st.k, train.n)}`;
+			const knn = new Knn(train, st.k);
+			this.knn = knn;
+			this.predictor = knn;
+			this.stepper = new KnnStepper(knn);
 		} else if (st.model === 'tree') {
-			const t = new DecisionTree(train, st.maxDepth);
+			const D = DOMAIN;
+			const t = new TreeGrower(train, st.maxDepth, 1, {
+				x0: D.xMin,
+				x1: D.xMax,
+				y0: D.yMin,
+				y1: D.yMax
+			});
+			this.tree = t;
 			this.predictor = t;
-			this.info = `${t.leaves} leaves, depth ${t.depth}`;
+			this.stepper = t;
 		} else {
 			const hidden = st.model === 'mlp' ? Array(st.layers).fill(st.width) : [];
 			const mlp = new Mlp({ degree: st.degree, hidden, activation: st.activation });
@@ -223,9 +289,23 @@ export class Session {
 			this.predictor = mlp;
 			const h = { ...VEC_DEFAULTS[st.optimizer], lr: st.lr };
 			this.opt = new VecOptimizer(st.optimizer, h, mlp.params.length);
-			this.info = `${mlp.params.length} parameters`;
 		}
-		this.reset();
+		if (this.stepper) {
+			this.stepper.finish();
+			this.status = 'done';
+		} else this.reset();
+	}
+
+	/** Number of training points k-NN has stored (null for other models). */
+	get stored(): number | null {
+		return this.knn ? this.knn.size : null;
+	}
+
+	/** Short description of the model's current size. */
+	get info(): string {
+		if (this.knn) return `${this.knn.size}/${this.train.n} stored · k = ${this.knn.kEff}`;
+		if (this.tree) return `${this.tree.leaves} leaves · depth ${this.tree.depth}`;
+		return `${this.mlp!.params.length} parameters`;
 	}
 
 	reset(): void {
@@ -233,44 +313,65 @@ export class Session {
 		if (this.mlp && this.opt) {
 			this.mlp.init(new Rng(this.seed ^ 0x5bd1e995));
 			this.opt.reset();
-			this.status = 'idle';
-			this.record();
-		} else {
-			this.status = 'done';
-		}
+		} else this.stepper!.reset();
+		this.status = 'idle';
+		this.record();
 	}
 
-	/** Evaluate metrics at the current parameters and store them (also computes gradients). */
+	/** Evaluate metrics at the current state and store them. */
 	private record(): boolean {
-		const m = this.mlp!;
-		const { loss, acc } = m.lossAndGrad(this.train, this.st.l2);
-		if (!Number.isFinite(loss)) return false;
-		const i = this.count++;
-		this.loss[i] = loss;
-		this.trainAcc[i] = acc;
-		this.testAcc[i] = m.accuracy(this.test);
+		const i = this.count;
+		if (i >= this.trainAcc.length) return false;
+		if (this.mlp) {
+			// also leaves ∇ in mlp.grads for the next optimizer step
+			const { loss, acc } = this.mlp.lossAndGrad(this.train, this.st.l2);
+			if (!Number.isFinite(loss)) return false;
+			this.loss[i] = loss;
+			this.trainAcc[i] = acc;
+			this.testAcc[i] = this.mlp.accuracy(this.test);
+		} else {
+			this.trainAcc[i] = this.accuracy(this.train);
+			this.testAcc[i] = this.accuracy(this.test);
+		}
+		this.count++;
 		return true;
 	}
 
-	get epoch(): number {
+	private accuracy(d: Points): number {
+		let c = 0;
+		for (let s = 0; s < d.n; s++) {
+			const p = this.predictor.predict(d.x[2 * s], d.x[2 * s + 1]);
+			if (p >= 0.5 === (d.y[s] === 1)) c++;
+		}
+		return d.n ? c / d.n : 0;
+	}
+
+	/** Steps taken since reset (0 for a fitted stepper that has not been replayed). */
+	get step(): number {
 		return Math.max(0, this.count - 1);
 	}
 
-	/** Run up to k epochs of full-batch training. Returns true while training can continue. */
+	/** Advance up to k steps (epochs, stored points or splits). Returns true while more remain. */
 	advance(k: number): boolean {
-		if (!this.mlp || !this.opt || this.status === 'done' || this.status === 'diverged')
-			return false;
+		if (this.status === 'done' || this.status === 'diverged') return false;
 		this.status = 'training';
 		for (let e = 0; e < k; e++) {
-			if (this.count > this.st.maxEpochs) {
-				this.status = 'done';
-				return false;
-			}
-			// gradients from the last record() are for the current parameters
-			this.opt.step(this.mlp.params, this.mlp.grads);
-			if (!this.record()) {
-				this.status = 'diverged';
-				return false;
+			if (this.mlp && this.opt) {
+				if (this.count > this.st.maxEpochs) {
+					this.status = 'done';
+					return false;
+				}
+				// gradients from the last record() are for the current parameters
+				this.opt.step(this.mlp.params, this.mlp.grads);
+				if (!this.record()) {
+					this.status = 'diverged';
+					return false;
+				}
+			} else {
+				if (!this.stepper!.step() || !this.record()) {
+					this.status = 'done';
+					return false;
+				}
 			}
 		}
 		return true;
@@ -278,18 +379,10 @@ export class Session {
 
 	/** Train/test accuracy at the current state. */
 	accuracies(): { train: number; test: number } {
-		if (this.mlp) {
+		if (this.count > 0) {
 			const i = this.count - 1;
 			return { train: this.trainAcc[i], test: this.testAcc[i] };
 		}
-		const acc = (d: Points) => {
-			let c = 0;
-			for (let s = 0; s < d.n; s++) {
-				const p = this.predictor.predict(d.x[2 * s], d.x[2 * s + 1]);
-				if (p >= 0.5 === (d.y[s] === 1)) c++;
-			}
-			return d.n ? c / d.n : 0;
-		};
-		return { train: acc(this.train), test: acc(this.test) };
+		return { train: this.accuracy(this.train), test: this.accuracy(this.test) };
 	}
 }

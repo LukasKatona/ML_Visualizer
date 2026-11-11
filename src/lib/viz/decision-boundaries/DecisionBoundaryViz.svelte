@@ -48,9 +48,9 @@
 	const session = $derived(new Session($state.snapshot(st), data.train, data.test));
 
 	const trainable = $derived(MODELS[st.model].trainable);
+	const labels = $derived(MODELS[st.model].labels);
 
 	function play() {
-		if (!session.trainable) return;
 		if (session.status === 'done' || session.status === 'diverged') reset();
 		playing = true;
 	}
@@ -60,7 +60,6 @@
 		version++;
 	}
 	function step() {
-		if (!session.trainable) return;
 		playing = false;
 		session.advance(1);
 		canvas?.paint();
@@ -148,10 +147,11 @@
 		const acc = s.accuracies();
 		return {
 			acc,
-			epoch: s.epoch,
+			step: s.step,
 			loss: s.mlp ? s.loss[s.count - 1] : null,
 			status: s.status,
 			info: s.info,
+			stored: s.stored,
 			count: s.count
 		};
 	});
@@ -169,22 +169,29 @@
 			train={data.train}
 			test={data.test}
 			{showTest}
+			stored={metrics.stored}
 			{brush}
 			onadd={addPoint}
 		/>
 
 		<div class="transport" role="toolbar" aria-label="Training">
-			{#if trainable}
-				{#if playing}
-					<button class="btn primary" onclick={pause} aria-keyshortcuts="Space K">Pause</button>
-				{:else}
-					<button class="btn primary" onclick={play} aria-keyshortcuts="Space K">
-						{metrics && metrics.epoch > 0 && metrics.status === 'training' ? 'Resume' : 'Train'}
-					</button>
-				{/if}
-				<button class="btn" onclick={step} aria-keyshortcuts="Period L">Step</button>
-				<button class="btn" onclick={reset} aria-keyshortcuts="R">Re-init</button>
+			{#if playing}
+				<button class="btn primary" onclick={pause} aria-keyshortcuts="Space K">Pause</button>
+			{:else}
+				<button class="btn primary" onclick={play} aria-keyshortcuts="Space K">
+					{metrics.step > 0 && metrics.status === 'training' ? 'Resume' : labels.play}
+				</button>
 			{/if}
+			<button
+				class="btn"
+				onclick={step}
+				aria-keyshortcuts="Period L"
+				disabled={!trainable && metrics.status === 'done'}
+				title={!trainable && metrics.status === 'done'
+					? `Fully built. ${labels.reset} first to rebuild step by step`
+					: undefined}>{labels.step}</button
+			>
+			<button class="btn" onclick={reset} aria-keyshortcuts="R">{labels.reset}</button>
 			<button class="btn share" onclick={share}>Share link</button>
 			<span class="visually-hidden" aria-live="polite">{announce}</span>
 			{#if announce}<span class="toast" aria-hidden="true">{announce}</span>{/if}
@@ -192,11 +199,13 @@
 
 		{#if metrics}
 			<dl class="stats">
-				{#if trainable}
+				{#if trainable || metrics.count > 0}
 					<div>
-						<dt>Epoch</dt>
-						<dd class="num">{metrics.epoch}</dd>
+						<dt>{labels.unit}</dt>
+						<dd class="num">{metrics.step}</dd>
 					</div>
+				{/if}
+				{#if trainable}
 					<div>
 						<dt>Train loss</dt>
 						<dd class="num">{metrics.loss?.toFixed(4)}</dd>
@@ -232,7 +241,11 @@
 		<p class="hint">
 			Click to add a <strong>class {brush}</strong> point · Shift-click or right-click adds class {1 -
 				brush}
-			{#if trainable}· <kbd>Space</kbd> train/pause · <kbd>.</kbd> step · <kbd>R</kbd> re-init{/if}
+			· <kbd>Space</kbd>
+			{labels.play.toLowerCase()}/pause · <kbd>.</kbd>
+			{labels.step.toLowerCase()} · <kbd>R</kbd>
+			{labels.reset.toLowerCase()}
+			{#if st.model === 'knn'}· hover to see the k nearest neighbours and their vote{/if}
 		</p>
 
 		{#if trainable}
@@ -242,8 +255,9 @@
 						series={[
 							{ id: 'loss', label: 'Train loss', color: 'var(--series-1)', data: session.loss }
 						]}
-						count={metrics?.count ?? 0}
+						count={metrics.count}
 						{version}
+						xLabel="epoch"
 						logY
 						label="Training loss (binary cross-entropy + L2) per epoch, log scale"
 					/>
@@ -265,14 +279,42 @@
 								dashed: true
 							}
 						]}
-						count={metrics?.count ?? 0}
+						count={metrics.count}
 						{version}
+						xLabel="epoch"
 						yDomain={[0.4, 1]}
 						yFormat={(v) => `${Math.round(v * 100)}%`}
 						label="Train and test accuracy per epoch"
 					/>
 				</ControlPanel>
 			</div>
+		{:else if metrics.count > 1}
+			<ControlPanel title={`Accuracy vs. ${labels.unit.toLowerCase()}`}>
+				<LineChart
+					series={[
+						{ id: 'train', label: 'Train', color: 'var(--series-1)', data: session.trainAcc },
+						{
+							id: 'test',
+							label: 'Test',
+							color: 'var(--series-2)',
+							data: session.testAcc,
+							dashed: true
+						}
+					]}
+					count={metrics.count}
+					{version}
+					xLabel={st.model === 'tree' ? 'splits' : 'stored'}
+					yDomain={[0.4, 1]}
+					yFormat={(v) => `${Math.round(v * 100)}%`}
+					label={`Train and test accuracy vs. ${labels.unit.toLowerCase()}`}
+				/>
+			</ControlPanel>
+		{:else}
+			<p class="note small">
+				{st.model === 'tree'
+					? 'Fully grown. Press Grow to rebuild it split by split (best split first).'
+					: 'All training points stored. Press Replay to store them one at a time and watch the boundary form.'}
+			</p>
 		{/if}
 	</div>
 
@@ -417,6 +459,18 @@
 					step={1}
 					format={(v) => String(v)}
 					onchange={(v) => (st.maxDepth = v)}
+				/>
+			{/if}
+			{#if !trainable}
+				<Slider
+					label={`Replay speed (${st.model === 'tree' ? 'splits' : 'points'} / frame)`}
+					value={st.speed}
+					min={DB_LIMITS.speed.min}
+					max={DB_LIMITS.speed.max}
+					log
+					integer
+					format={(v) => String(v)}
+					onchange={(v) => (st.speed = v)}
 				/>
 			{/if}
 		</ControlPanel>

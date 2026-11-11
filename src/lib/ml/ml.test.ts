@@ -11,7 +11,7 @@ import {
 import { Knn } from './knn.ts';
 import { Mlp, featureCount, polyFeatures, type MlpConfig } from './mlp.ts';
 import { VEC_DEFAULTS, VecOptimizer, type VecOptimizerId } from './optim.ts';
-import { DecisionTree } from './tree.ts';
+import { DecisionTree, TreeGrower } from './tree.ts';
 
 function trainAcc(predict: (x: number, y: number) => number, d: Points) {
 	let c = 0;
@@ -153,6 +153,24 @@ describe('k-NN', () => {
 		expect(trainAcc((x, y) => knn.predict(x, y), d)).toBe(1);
 	});
 
+	it('stores points incrementally and reports neighbours nearest-first', () => {
+		const d: Points = {
+			x: new Float64Array([0, 0, 1, 0, 2, 0, 3, 0]),
+			y: new Uint8Array([1, 1, 0, 0]),
+			n: 4
+		};
+		const knn = new Knn(d, 3);
+		knn.size = 0;
+		expect(knn.predict(0, 0)).toBe(0.5);
+		knn.size = 2;
+		expect(knn.kEff).toBe(2);
+		expect(knn.predict(3, 0)).toBe(1); // only the two class-1 points are stored
+		knn.size = 4;
+		const out = new Int32Array(3);
+		expect(knn.neighbors(2.2, 0, out)).toBe(3);
+		expect(Array.from(out)).toEqual([2, 3, 1]);
+	});
+
 	it('returns the class-1 fraction among the k nearest', () => {
 		const d: Points = {
 			x: new Float64Array([0, 0, 1, 0, 2, 0, 3, 0]),
@@ -178,6 +196,33 @@ describe('decision tree', () => {
 		expect(t.leaves).toBe(2);
 		expect(t.depth).toBe(1);
 		expect(trainAcc((x, y) => t.predict(x, y), d)).toBeGreaterThan(0.8);
+	});
+
+	it('best-first growth reaches the same tree as recursive CART, one split per step', () => {
+		const { train: d, test } = generate('circles', 300, 0.1, 4);
+		const full = new DecisionTree(d, 6);
+		const g = new TreeGrower(d, 6);
+		expect(g.leaves).toBe(1);
+		let steps = 0;
+		while (g.step()) steps++;
+		expect(steps).toBe(full.leaves - 1);
+		expect(g.splits).toHaveLength(steps);
+		for (let i = 0; i < test.n; i++) {
+			const x = test.x[2 * i];
+			const y = test.x[2 * i + 1];
+			expect(g.predict(x, y)).toBe(full.predict(x, y));
+		}
+		g.reset();
+		expect(g.leaves).toBe(1);
+		expect(g.predict(0, 0)).toBeCloseTo(0.5, 1);
+	});
+
+	it('a depth-1 tree is complete after exactly one split', () => {
+		const { train: d } = generate('blobs', 200, 0.1, 2);
+		const g = new TreeGrower(d, 1);
+		g.step();
+		expect(g.splits).toHaveLength(1);
+		expect(g.step()).toBe(false);
 	});
 
 	it('finds the obvious axis-aligned split', () => {

@@ -7,7 +7,7 @@
 	import { onMount } from 'svelte';
 	import { isolines, makeDivergingRamp, paintField } from '#lib/math/field.ts';
 	import { DOMAIN, type Points } from '#lib/ml/datasets.ts';
-	import type { Predictor } from '#lib/ml/session.ts';
+	import { hasNeighbours, hasSplits, type Predictor } from '#lib/ml/session.ts';
 	import { theme } from '#lib/theme.svelte.ts';
 
 	interface Props {
@@ -15,16 +15,19 @@
 		train: Points;
 		test: Points;
 		showTest: boolean;
+		/** k-NN replay: training points with index ≥ stored are not in memory yet (drawn faded). */
+		stored?: number | null;
 		/** Class placed by a plain click / Enter (Shift places the other class). */
 		brush: 0 | 1;
 		onadd: (x: number, y: number, cls: 0 | 1) => void;
 	}
 
-	let { predictor, train, test, showTest, brush, onadd }: Props = $props();
+	let { predictor, train, test, showTest, stored = null, brush, onadd }: Props = $props();
 
 	let wrap: HTMLDivElement;
 	let fieldCv: HTMLCanvasElement;
 	let pointCv: HTMLCanvasElement;
+	let hoverCv: HTMLCanvasElement;
 	let W = 0;
 	let H = 0;
 	let dpr = 1;
@@ -110,6 +113,81 @@
 		c.strokeStyle = ramp.iso;
 		c.lineWidth = 1.75;
 		c.stroke();
+
+		// tree partition: every split as a thin segment, the newest one emphasised
+		if (hasSplits(predictor) && predictor.splits.length) {
+			const segs2 = predictor.splits;
+			const last = segs2.length - 1;
+			c.setLineDash([4, 3]);
+			for (let i = 0; i <= last; i++) {
+				const sp = segs2[i];
+				const newest = i === last;
+				c.beginPath();
+				if (sp.feat === 0) {
+					c.moveTo(px(sp.thr), py(sp.lo));
+					c.lineTo(px(sp.thr), py(sp.hi));
+				} else {
+					c.moveTo(px(sp.lo), py(sp.thr));
+					c.lineTo(px(sp.hi), py(sp.thr));
+				}
+				c.strokeStyle = textColor;
+				c.globalAlpha = newest ? 0.95 : 0.35;
+				c.lineWidth = newest ? 2 : 1;
+				c.stroke();
+			}
+			c.setLineDash([]);
+			c.globalAlpha = 1;
+		}
+	}
+
+	// ---------- hover: k-NN neighbourhood ----------
+	const nbr = new Int32Array(128);
+	let hoverPt: [number, number] | null = null;
+	let vote = $state<{ ones: number; k: number } | null>(null);
+
+	function drawHover() {
+		if (!W || !hoverCv) return;
+		const c = ctx(hoverCv);
+		c.clearRect(0, 0, W, H);
+		vote = null;
+		if (!hoverPt || !predictor || !hasNeighbours(predictor)) return;
+		const m = predictor.neighbors(hoverPt[0], hoverPt[1], nbr);
+		if (!m) return;
+		const u = px(hoverPt[0]);
+		const v = py(hoverPt[1]);
+		const d = predictor.data;
+		let ones = 0;
+		// radius = distance to the k-th neighbour
+		const far = nbr[m - 1];
+		const r = Math.hypot(px(d.x[2 * far]) - u, py(d.x[2 * far + 1]) - v);
+		c.beginPath();
+		c.arc(u, v, r, 0, 2 * Math.PI);
+		c.setLineDash([4, 4]);
+		c.strokeStyle = textColor;
+		c.globalAlpha = 0.7;
+		c.lineWidth = 1.25;
+		c.stroke();
+		c.setLineDash([]);
+		c.globalAlpha = 0.55;
+		c.lineWidth = 1;
+		c.beginPath();
+		for (let i = 0; i < m; i++) {
+			const s2 = nbr[i];
+			ones += d.y[s2];
+			c.moveTo(u, v);
+			c.lineTo(px(d.x[2 * s2]), py(d.x[2 * s2 + 1]));
+		}
+		c.stroke();
+		c.globalAlpha = 1;
+		for (let i = 0; i < m; i++) {
+			const s2 = nbr[i];
+			c.beginPath();
+			c.arc(px(d.x[2 * s2]), py(d.x[2 * s2 + 1]), 7, 0, 2 * Math.PI);
+			c.lineWidth = 1.5;
+			c.strokeStyle = textColor;
+			c.stroke();
+		}
+		vote = { ones, k: m };
 	}
 
 	function marker(c: CanvasRenderingContext2D, u: number, v: number, cls: number, hollow: boolean) {
@@ -139,8 +217,12 @@
 		const c = ctx(pointCv);
 		c.clearRect(0, 0, W, H);
 		c.lineJoin = 'round';
-		for (let i = 0; i < train.n; i++)
+		const limit = stored ?? train.n;
+		for (let i = 0; i < train.n; i++) {
+			c.globalAlpha = i < limit ? 1 : 0.22;
 			marker(c, px(train.x[2 * i]), py(train.x[2 * i + 1]), train.y[i], false);
+		}
+		c.globalAlpha = 1;
 		if (showTest)
 			for (let i = 0; i < test.n; i++)
 				marker(c, px(test.x[2 * i]), py(test.x[2 * i + 1]), test.y[i], true);
@@ -165,12 +247,13 @@
 		dpr = Math.min(window.devicePixelRatio || 1, 2);
 		W = Math.max(1, Math.round(r.width));
 		H = Math.max(1, Math.round(r.height));
-		for (const cv of [fieldCv, pointCv]) {
+		for (const cv of [fieldCv, pointCv, hoverCv]) {
 			cv.width = Math.round(W * dpr);
 			cv.height = Math.round(H * dpr);
 		}
 		paint();
 		drawPoints();
+		drawHover();
 	}
 
 	onMount(() => {
@@ -193,10 +276,21 @@
 		void train;
 		void test;
 		void showTest;
+		void stored;
 		void focused;
 		void cursor;
 		drawPoints();
 	});
+
+	function readout(h: { x: number; y: number; p: number | null }): string {
+		const parts = [`x ${h.x.toFixed(2)}`, `y ${h.y.toFixed(2)}`];
+		if (h.p !== null) parts.push(`P(y=1) ${h.p.toFixed(3)}`);
+		if (vote) {
+			const v = 2 * vote.ones - vote.k;
+			parts.push(`vote ${vote.ones}/${vote.k} → ${v > 0 ? 'class 1' : v < 0 ? 'class 0' : 'tie'}`);
+		}
+		return parts.join(' · ');
+	}
 
 	function toWorld(e: PointerEvent): [number, number] {
 		const r = wrap.getBoundingClientRect();
@@ -237,6 +331,8 @@
 		e.preventDefault();
 		cursor = [Math.min(D.xMax, Math.max(D.xMin, x)), Math.min(D.yMax, Math.max(D.yMin, y))];
 		hover = { x: cursor[0], y: cursor[1], p: predictor?.predict(cursor[0], cursor[1]) ?? null };
+		hoverPt = [cursor[0], cursor[1]];
+		drawHover();
 	}
 </script>
 
@@ -253,8 +349,14 @@
 		onpointermove={(e) => {
 			const [x, y] = toWorld(e);
 			hover = { x, y, p: predictor?.predict(x, y) ?? null };
+			hoverPt = [x, y];
+			drawHover();
 		}}
-		onpointerleave={() => (hover = null)}
+		onpointerleave={() => {
+			hover = null;
+			hoverPt = null;
+			drawHover();
+		}}
 		oncontextmenu={(e) => e.preventDefault()}
 		onkeydown={onKeyDown}
 		onfocus={() => (focused = true)}
@@ -262,10 +364,10 @@
 	>
 		<canvas bind:this={fieldCv}></canvas>
 		<canvas bind:this={pointCv}></canvas>
+		<canvas bind:this={hoverCv}></canvas>
 		{#if hover}
 			<div class="readout num" aria-hidden="true">
-				x {hover.x.toFixed(2)} · y {hover.y.toFixed(2)}{#if hover.p !== null}
-					· P(y=1) {hover.p.toFixed(3)}{/if}
+				{readout(hover)}
 			</div>
 		{/if}
 	</div>

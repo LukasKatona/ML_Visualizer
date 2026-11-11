@@ -33,6 +33,8 @@ Choices made during the build that need an ML sanity check.
 - [ ] **L2 is applied to weights only** (not biases), as λ/2·‖W‖² added to the mean BCE.
 - [ ] **k-NN ties:** with even k, P = 0.5 exactly lies on the boundary; no tie-breaking rule.
 - [ ] Model notes ("Works well" / "Struggles") in `src/lib/ml/docs.ts`.
+- [ ] **Step order:** trees expand best-first by n·ΔGini (sklearn's `max_leaf_nodes` order), not
+      level by level. k-NN stores points in the (shuffled) dataset order. Good teaching choices?
 
 ## Product
 

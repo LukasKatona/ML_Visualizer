@@ -36,7 +36,10 @@ client-side. There is no backend, no cookies and no tracking.
 - **Models:** logistic regression on polynomial features (degree 1–5), an MLP (1–3 hidden layers,
   tanh/ReLU) with hand-written backprop, k-NN, and a CART decision tree (Gini).
 - **Training:** full-batch SGD/Momentum/Adam with L2, animated live, plus loss and train/test
-  accuracy charts. k-NN and trees refit instantly.
+  accuracy charts.
+- **Step-by-step k-NN and trees:** a tree grows one split at a time, best first by weighted
+  Gini decrease, with the split lines drawn and the newest highlighted. k-NN "trains" by storing
+  one point per step, and hovering shows the k nearest neighbours, their radius and the vote.
 - **Plot:** P(y = 1 | x) on a diverging blue/red map with the p = 0.5 boundary. Classes differ by
   shape (circle/square) as well as colour, and test points are hollow.
 

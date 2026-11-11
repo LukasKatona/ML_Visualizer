@@ -60,7 +60,7 @@ describe('Session', () => {
 		const l0 = s.loss[0];
 		while (s.advance(7));
 		expect(s.status).toBe('done');
-		expect(s.epoch).toBe(60);
+		expect(s.step).toBe(60);
 		expect(s.loss[s.count - 1]).toBeLessThan(l0);
 	});
 
@@ -80,13 +80,35 @@ describe('Session', () => {
 		for (let i = 0; i < s.count; i++) expect(Number.isFinite(s.loss[i])).toBe(true);
 	});
 
-	it('non-trainable models are fitted immediately', () => {
+	it('k-NN and trees start fully fitted', () => {
 		const t = session({ model: 'tree', maxDepth: 3 });
 		expect(t.status).toBe('done');
 		expect(t.advance(5)).toBe(false);
 		expect(t.accuracies().train).toBeGreaterThan(0.8);
 		const k = session({ model: 'knn', k: 1 });
 		expect(k.accuracies().train).toBe(1);
+	});
+
+	it('a tree replays split by split and ends at the fitted tree', () => {
+		const t = session({ model: 'tree', maxDepth: 4, dataset: 'circles' });
+		const fitted = t.accuracies();
+		t.reset();
+		expect(t.count).toBe(1);
+		expect(t.info).toBe('1 leaves · depth 0');
+		while (t.advance(1));
+		expect(t.status).toBe('done');
+		expect(t.accuracies()).toEqual(fitted);
+		expect(t.step).toBe(Number(t.info.split(' ')[0]) - 1); // splits = leaves − 1
+	});
+
+	it('k-NN replays by storing one point per step', () => {
+		const k = session({ model: 'knn', k: 5 });
+		const fitted = k.accuracies();
+		k.reset();
+		expect(k.info).toMatch(/^0\//);
+		while (k.advance(7));
+		expect(k.step).toBe(k.train.n);
+		expect(k.accuracies()).toEqual(fitted);
 	});
 
 	it('default MLP reaches high test accuracy on moons', () => {

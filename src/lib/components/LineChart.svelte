@@ -24,6 +24,8 @@
 		yDomain?: [number, number];
 		yFormat?: (v: number) => string;
 		label: string;
+		/** Unit of the x axis shown in the tooltip (e.g. 'epoch'). */
+		xLabel?: string;
 		height?: number;
 	}
 
@@ -35,6 +37,7 @@
 		yDomain,
 		yFormat = (v) => String(Number(v.toPrecision(3))),
 		label,
+		xLabel = 'step',
 		height = 180
 	}: Props = $props();
 
@@ -181,7 +184,7 @@
 	</svg>
 	{#if tip}
 		<div class="tip" style:left={`${Math.min(tip.x + 12, width - 150)}px`} aria-hidden="true">
-			<div class="tt">epoch {tip.i}</div>
+			<div class="tt">{xLabel} {tip.i}</div>
 			{#each tip.rows as r (r.id)}
 				<div class="tr">
 					<span>{r.label}</span><span class="num">{yFormat(r.v)}</span>

@@ -3,6 +3,8 @@
 	import { visualizer } from '#lib/site.config.ts';
 	import GradientDescentViz from '#lib/viz/gradient-descent/GradientDescentViz.svelte';
 
+	let { data } = $props();
+
 	const meta = visualizer('gradient-descent');
 </script>
 
@@ -17,7 +19,7 @@
 		<p class="eyebrow">Visualizer 01 · Optimization</p>
 		<h1>{meta.title}</h1>
 	</header>
-	<GradientDescentViz />
+	<GradientDescentViz tex={data.tex} />
 </div>
 
 <style>

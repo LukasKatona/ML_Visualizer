@@ -23,6 +23,7 @@
 
 <style>
 	.panel {
+		min-width: 0;
 		background: var(--surface);
 		border: 1px solid var(--border);
 		border-radius: var(--radius);
@@ -51,6 +52,7 @@
 	.content {
 		padding: 12px 14px 14px;
 		display: grid;
+		grid-template-columns: minmax(0, 1fr);
 		gap: 12px;
 	}
 </style>

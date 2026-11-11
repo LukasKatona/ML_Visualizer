@@ -16,7 +16,17 @@
 	} from '#lib/optimizers/optimizers.ts';
 	import { Simulation, type RunStatus } from '#lib/sim/engine.ts';
 	import { LIMITS, decode, defaultState, encode, fmt, type VizState } from '#lib/sim/urlState.ts';
+	import { OPTIMIZER_DOCS } from '#lib/optimizers/docs.ts';
+	import 'katex/dist/katex.min.css';
+	import LossChart from './LossChart.svelte';
 	import SurfaceCanvas from './SurfaceCanvas.svelte';
+
+	interface Props {
+		/** Pre-rendered KaTeX HTML (built at prerender time). */
+		tex: { optimizers: Record<OptimizerId, string>; surfaces: Record<SurfaceId, string> };
+	}
+
+	let { tex }: Props = $props();
 
 	// ---------- state (mirrors VizState; hyperparameters kept for all optimizers) ----------
 	const init = defaultState();
@@ -272,6 +282,28 @@
 			Click the surface to set the start point · <kbd>Space</kbd> play/pause · <kbd>.</kbd> step ·
 			<kbd>R</kbd> reset
 		</p>
+
+		<ControlPanel title="Loss vs. iteration">
+			{#snippet actions()}
+				<label class="check">
+					<input
+						type="checkbox"
+						checked={logY}
+						onchange={(e) => (logY = e.currentTarget.checked)}
+					/>
+					Log y-axis
+				</label>
+			{/snippet}
+			<LossChart {sim} {version} {logY} yLabel={surface.minima.length ? 'f − f*' : 'f − min f'} />
+			<p class="note small">
+				{#if surface.minima.length}
+					f* = {surface.fRef} is the global minimum.
+				{:else}
+					Unbounded below: the reference is the minimum over the displayed domain ({surface.fRef}).
+				{/if}
+				{#if noise > 0}Loss is the true f, evaluated at the iterate; only gradients are noisy.{/if}
+			</p>
+		</ControlPanel>
 	</div>
 
 	<aside class="side" aria-label="Controls">
@@ -287,6 +319,9 @@
 					{/each}
 				</select>
 			</label>
+			<!-- trusted: KaTeX output of constant formulas, rendered at build time -->
+			<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+			<div class="tex">{@html tex.surfaces[surfaceId]}</div>
 			<p class="note">{surface.note}</p>
 		</ControlPanel>
 
@@ -357,6 +392,17 @@
 			{/if}
 		</ControlPanel>
 
+		<ControlPanel title={`${OPTIMIZERS[selected].name} update rule`}>
+			<!-- trusted: KaTeX output of constant formulas, rendered at build time -->
+			<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+			<div class="tex">{@html tex.optimizers[selected]}</div>
+			<p class="note"><strong>Works well:</strong> {OPTIMIZER_DOCS[selected].good}</p>
+			<p class="note"><strong>Struggles:</strong> {OPTIMIZER_DOCS[selected].bad}</p>
+			<p class="note small">
+				g<sub>t</sub> = ∇f(θ<sub>t</sub>) (+ noise); squares, roots and division are element-wise.
+			</p>
+		</ControlPanel>
+
 		<ControlPanel title="Simulation">
 			<Slider
 				label="Speed (steps / frame)"
@@ -415,11 +461,14 @@
 		grid-area: plot;
 		min-width: 0;
 		display: grid;
+		grid-template-columns: minmax(0, 1fr);
 		gap: 12px;
 	}
 	.side {
 		grid-area: side;
 		display: grid;
+		grid-template-columns: minmax(0, 1fr);
+		min-width: 0;
 		gap: 12px;
 		align-content: start;
 	}
@@ -543,6 +592,38 @@
 		min-height: 28px;
 		padding: 0 9px;
 		font-size: 12.5px;
+	}
+	.note.small {
+		font-size: 12px;
+		color: var(--muted);
+	}
+	.note strong {
+		color: var(--text);
+		font-weight: 600;
+	}
+	.check {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		font-size: 12.5px;
+		color: var(--text-2);
+		cursor: pointer;
+	}
+	.check input {
+		accent-color: var(--accent);
+		width: 15px;
+		height: 15px;
+		margin: 0;
+	}
+	.tex {
+		overflow-x: auto;
+		overflow-y: hidden;
+		font-size: 14px;
+		padding: 2px 0;
+		scrollbar-width: thin;
+	}
+	.tex :global(.katex-display) {
+		margin: 0.2em 0;
 	}
 	.seed {
 		display: flex;

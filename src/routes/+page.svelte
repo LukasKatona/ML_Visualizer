@@ -36,7 +36,7 @@
 				</div>
 				<h2>
 					{#if live}
-						<a href={resolve('/gradient-descent')} class="stretched">{v.title}</a>
+						<a href={resolve(`/${v.slug}` as '/gradient-descent')} class="stretched">{v.title}</a>
 					{:else}
 						{v.title}
 					{/if}

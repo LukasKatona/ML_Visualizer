@@ -20,6 +20,20 @@ Choices made during the build that need an ML sanity check.
 - [ ] Review the default learning rates and start points per surface, and the optimizer notes
       ("Works well" / "Struggles") in `src/lib/optimizers/docs.ts`.
 
+### Decision Boundaries
+
+- [ ] **Dataset definitions and default noise** (σ = 0.15, 70/30 split): are moons/spirals scaled
+      sensibly, and is the XOR margin (points kept ≥ 0.08 from the axes) right?
+      (`src/lib/ml/datasets.ts`)
+- [ ] **Polynomial features are not standardised.** At degree 5, x⁵ spans about ±10 while x spans
+      ±1.6, which skews plain SGD. Standardise the features, or leave the effect visible as a
+      lesson? (`src/lib/ml/mlp.ts`)
+- [ ] **Initialisation:** Xavier-normal for tanh, He-normal for ReLU, output layer Xavier, zero
+      biases.
+- [ ] **L2 is applied to weights only** (not biases), as λ/2·‖W‖² added to the mean BCE.
+- [ ] **k-NN ties:** with even k, P = 0.5 exactly lies on the boundary; no tie-breaking rule.
+- [ ] Model notes ("Works well" / "Struggles") in `src/lib/ml/docs.ts`.
+
 ## Product
 
 - [ ] Set `SITE.repoUrl` in `src/lib/site.config.ts` (footer source link).

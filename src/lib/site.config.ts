@@ -48,10 +48,10 @@ export const VISUALIZERS: VisualizerMeta[] = [
 		slug: 'decision-boundaries',
 		title: 'Decision Boundaries',
 		description:
-			'How logistic regression, kernels, trees and small MLPs carve up the input space as they train.',
-		status: 'soon',
+			'Train logistic regression and neural networks live; compare k-NN and decision trees on moons, XOR, circles and spirals.',
+		status: 'live',
 		access: 'free',
-		tags: ['classification'],
+		tags: ['classification', 'MLP', 'k-NN'],
 		glyph: 'boundary'
 	},
 	{

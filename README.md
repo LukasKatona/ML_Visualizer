@@ -10,7 +10,7 @@ client-side. There is no backend, no cookies and no tracking.
 | Visualizer                        | Status      |
 | --------------------------------- | ----------- |
 | **Gradient Descent & Optimizers** | Live        |
-| Decision Boundaries               | Coming soon |
+| **Decision Boundaries**           | Live        |
 | Attention                         | Coming soon |
 | Explainability (XAI) methods      | Coming soon |
 
@@ -27,6 +27,18 @@ client-side. There is no backend, no cookies and no tracking.
   linear y), and each optimizer's update rule in KaTeX with notes on when it works and when it fails.
 - **Shareable state:** the full setup is encoded in a readable URL, e.g.
   `?s=beale&p=0.7,1.4&o=adam:lr=0.05,sgd:lr=0.001&n=1000`.
+
+### Decision Boundaries
+
+- **Datasets:** Gaussian blobs, XOR, two moons, concentric circles and spirals, with adjustable
+  noise and size, a seeded 70/30 train/test split, and click-to-add points (Shift or right-click
+  adds the other class).
+- **Models:** logistic regression on polynomial features (degree 1–5), an MLP (1–3 hidden layers,
+  tanh/ReLU) with hand-written backprop, k-NN, and a CART decision tree (Gini).
+- **Training:** full-batch SGD/Momentum/Adam with L2, animated live, plus loss and train/test
+  accuracy charts. k-NN and trees refit instantly.
+- **Plot:** P(y = 1 | x) on a diverging blue/red map with the p = 0.5 boundary. Classes differ by
+  shape (circle/square) as well as colour, and test points are hollow.
 
 ## Stack
 

@@ -53,10 +53,8 @@ export function normalise(field: Field, f: number): number {
 
 // ---------- colour ----------
 
-function oklchToRgb(L: number, C: number, hDeg: number): [number, number, number] {
-	const h = (hDeg * Math.PI) / 180;
-	const a = C * Math.cos(h);
-	const b = C * Math.sin(h);
+/** OKLab → sRGB bytes (clamped). */
+export function oklabToRgb(L: number, a: number, b: number): [number, number, number] {
 	const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3;
 	const m = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3;
 	const s = (L - 0.0894841775 * a - 1.291485548 * b) ** 3;
@@ -69,6 +67,15 @@ function oklchToRgb(L: number, C: number, hDeg: number): [number, number, number
 		const v = c <= 0.0031308 ? 12.92 * c : 1.055 * Math.max(c, 0) ** (1 / 2.4) - 0.055;
 		return Math.round(255 * Math.min(1, Math.max(0, v)));
 	}) as [number, number, number];
+}
+
+function oklchToLab(L: number, C: number, hDeg: number): [number, number, number] {
+	const h = (hDeg * Math.PI) / 180;
+	return [L, C * Math.cos(h), C * Math.sin(h)];
+}
+
+function oklchToRgb(L: number, C: number, hDeg: number): [number, number, number] {
+	return oklabToRgb(...oklchToLab(L, C, hDeg));
 }
 
 export interface Ramp {
@@ -99,7 +106,32 @@ export function makeRamp(theme: 'light' | 'dark'): Ramp {
 	};
 }
 
-export function paintField(field: Field, ramp: Ramp, img: ImageData): void {
+/**
+ * Diverging ramp for probabilities: class 0 (blue) ← neutral (p = 0.5) → class 1 (red).
+ * Each arm is interpolated linearly in OKLab; poles are light tints so data points stay on top.
+ */
+export function makeDivergingRamp(theme: 'light' | 'dark'): Ramp {
+	const [Ln, Lp, C] = theme === 'light' ? [0.965, 0.78, 0.085] : [0.235, 0.42, 0.09];
+	const neutral = oklchToLab(Ln, 0.004, 90);
+	const blue = oklchToLab(Lp, C, 255);
+	const red = oklchToLab(Lp, C, 25);
+	const lut = new Uint8ClampedArray(256 * 3);
+	for (let i = 0; i < 256; i++) {
+		const u = i / 255;
+		const [pole, w] = u < 0.5 ? [blue, 1 - 2 * u] : [red, 2 * u - 1];
+		const [r, g, b] = oklabToRgb(
+			neutral[0] + (pole[0] - neutral[0]) * w,
+			neutral[1] + (pole[1] - neutral[1]) * w,
+			neutral[2] + (pole[2] - neutral[2]) * w
+		);
+		lut[3 * i] = r;
+		lut[3 * i + 1] = g;
+		lut[3 * i + 2] = b;
+	}
+	return { lut, iso: theme === 'light' ? 'rgba(20, 22, 28, 0.85)' : 'rgba(235, 238, 245, 0.85)' };
+}
+
+export function paintField(field: Pick<Field, 't'>, ramp: Ramp, img: ImageData): void {
 	const d = img.data;
 	const { t } = field;
 	for (let k = 0; k < t.length; k++) {
@@ -117,7 +149,10 @@ export function paintField(field: Field, ramp: Ramp, img: ImageData): void {
  * Marching squares. Returns line segments [x0, y0, x1, y1, ...] in grid coordinates
  * (i ∈ [0, nx−1], j ∈ [0, ny−1]).
  */
-export function isolines(field: Field, levels: readonly number[]): Float32Array {
+export function isolines(
+	field: Pick<Field, 'nx' | 'ny' | 't'>,
+	levels: readonly number[]
+): Float32Array {
 	const { nx, ny, t } = field;
 	const out: number[] = [];
 	for (const lv of levels) {

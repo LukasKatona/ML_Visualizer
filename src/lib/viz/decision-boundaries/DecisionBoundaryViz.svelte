@@ -283,7 +283,9 @@
 				<select
 					value={st.dataset}
 					onchange={(e) => {
-						st.dataset = e.currentTarget.value as DatasetId;
+						const id = e.currentTarget.value as DatasetId;
+						st.dataset = id;
+						st.noise = DATASETS[id].noise;
 						st.extra = [];
 					}}
 				>

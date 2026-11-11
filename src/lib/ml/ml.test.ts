@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { Rng } from '../math/rng.ts';
-import { DATASET_IDS, TEST_FRACTION, generate, withExtra, type Points } from './datasets.ts';
+import {
+	DATASETS,
+	DATASET_IDS,
+	TEST_FRACTION,
+	generate,
+	withExtra,
+	type Points
+} from './datasets.ts';
 import { Knn } from './knn.ts';
 import { Mlp, featureCount, polyFeatures, type MlpConfig } from './mlp.ts';
 import { VEC_DEFAULTS, VecOptimizer, type VecOptimizerId } from './optim.ts';
@@ -35,6 +42,17 @@ describe('datasets', () => {
 			expect(a.train.n + a.test.n).toBe(200);
 			const ones = [...a.train.y, ...a.test.y].reduce((s, v) => s + v, 0);
 			expect(ones).toBe(100);
+		}
+	});
+
+	it('every dataset is clearly learnable at its default noise (k-NN, k = 5)', () => {
+		for (const id of DATASET_IDS) {
+			const { train, test } = generate(id, 400, DATASETS[id].noise, 1);
+			const knn = new Knn(train, 5);
+			expect(
+				trainAcc((x, y) => knn.predict(x, y), test),
+				id
+			).toBeGreaterThan(0.9);
 		}
 	});
 

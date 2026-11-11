@@ -2,7 +2,7 @@
  * Decision-boundary visualizer state, URL codec and training session.
  */
 import { Rng } from '../math/rng.ts';
-import { isDatasetId, type DatasetId, type Points } from './datasets.ts';
+import { DATASETS, isDatasetId, type DatasetId, type Points } from './datasets.ts';
 import { Knn } from './knn.ts';
 import { Mlp, type Activation } from './mlp.ts';
 import { VEC_DEFAULTS, VecOptimizer, type VecOptimizerId } from './optim.ts';
@@ -65,7 +65,7 @@ export function defaultDbState(): DbState {
 	return {
 		dataset: 'moons',
 		n: 200,
-		noise: 0.15,
+		noise: DATASETS.moons.noise,
 		seed: 1,
 		extra: [],
 		model: 'mlp',
@@ -134,7 +134,10 @@ export function decodeDb(search: string): DbState {
 	};
 
 	const d = q.get('d') ?? '';
-	if (isDatasetId(d)) s.dataset = d;
+	if (isDatasetId(d)) {
+		s.dataset = d;
+		s.noise = DATASETS[d].noise;
+	}
 	s.n = int('n', L.n, s.n);
 	s.noise = real('nz', L.noise, s.noise);
 	const seed = num('seed');

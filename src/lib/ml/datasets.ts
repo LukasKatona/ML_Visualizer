@@ -23,33 +23,43 @@ export interface DatasetMeta {
 	id: DatasetId;
 	name: string;
 	note: string;
+	/**
+	 * Default Gaussian jitter σ. Per dataset, because the class separation differs a lot
+	 * (adjacent spiral arms are only ~0.35 apart, the blobs ~1.1).
+	 */
+	noise: number;
 }
 
 export const DATASETS: Record<DatasetId, DatasetMeta> = {
 	blobs: {
 		id: 'blobs',
 		name: 'Gaussian blobs',
-		note: 'Two isotropic Gaussians: (nearly) linearly separable, so the Bayes boundary is a line.'
+		note: 'Two isotropic Gaussians: (nearly) linearly separable, so the Bayes boundary is a line.',
+		noise: 0.1
 	},
 	xor: {
 		id: 'xor',
 		name: 'XOR',
-		note: 'Label = sign(x)·sign(y). No linear model can separate it; a product feature xy or one hidden layer can.'
+		note: 'Label = sign(x)·sign(y). No linear model can separate it; a product feature xy or one hidden layer can.',
+		noise: 0.1
 	},
 	moons: {
 		id: 'moons',
 		name: 'Two moons',
-		note: 'Interleaving half-circles: a smooth non-linear boundary that is easy to overfit at high noise.'
+		note: 'Interleaving half-circles: a smooth non-linear boundary that is easy to overfit at high noise.',
+		noise: 0.12
 	},
 	circles: {
 		id: 'circles',
 		name: 'Concentric circles',
-		note: 'Radially separable: degree-2 features (x² + y²) suffice; trees need many axis-aligned splits.'
+		note: 'Radially separable: degree-2 features (x² + y²) suffice; trees need many axis-aligned splits.',
+		noise: 0.1
 	},
 	spirals: {
 		id: 'spirals',
 		name: 'Spirals',
-		note: 'Two interleaved spirals: a hard boundary that needs depth/width and many epochs.'
+		note: 'Two interleaved spirals: a hard boundary that needs depth/width and many epochs.',
+		noise: 0.04
 	}
 };
 

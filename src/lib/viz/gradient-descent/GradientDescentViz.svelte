@@ -544,8 +544,12 @@
 	.runs .r {
 		text-align: right;
 	}
-	.runs tr.off td:not(:first-child) {
-		opacity: 0.55;
+	.runs tr.off td,
+	.runs tr.off .opt {
+		color: var(--muted);
+	}
+	.runs tr.off .sw {
+		opacity: 0.45;
 	}
 	.runs input[type='checkbox'] {
 		width: 16px;

@@ -39,7 +39,6 @@
 	let colors: Record<string, string> = {};
 	let surfaceColor = '#fff';
 	let textColor = '#000';
-	let mutedColor = '#666';
 
 	/** Per-run number of trajectory points already drawn on the trails layer. */
 	let drawn = new Int32Array(0);
@@ -59,7 +58,6 @@
 		for (const id of Object.keys(OPTIMIZERS)) colors[id] = cs.getPropertyValue(`--c-${id}`).trim();
 		surfaceColor = cs.getPropertyValue('--surface').trim();
 		textColor = cs.getPropertyValue('--text').trim();
-		mutedColor = cs.getPropertyValue('--muted').trim();
 	}
 
 	function ctx2d(cv: HTMLCanvasElement) {
@@ -116,9 +114,16 @@
 		}
 		c.stroke();
 
-		// ticks
+		// ticks (text with a surface halo so they stay legible over any colour)
 		c.font = '11px ui-monospace, Menlo, monospace';
-		c.fillStyle = mutedColor;
+		c.lineJoin = 'round';
+		c.lineWidth = 3;
+		c.strokeStyle = surfaceColor;
+		c.fillStyle = textColor;
+		const label = (t: string, u: number, v: number) => {
+			c.strokeText(t, u, v);
+			c.fillText(t, u, v);
+		};
 		const stx = niceStep(dom.xMax - dom.xMin);
 		const sty = niceStep(dom.yMax - dom.yMin);
 		c.textAlign = 'center';
@@ -126,14 +131,14 @@
 		for (let x = Math.ceil(dom.xMin / stx) * stx; x <= dom.xMax; x += stx) {
 			if (Math.abs(x - dom.xMin) < stx * 0.3) continue;
 			c.fillRect(px(x) - 0.5, H - 4, 1, 4);
-			c.fillText(fmt(x), px(x), H - 6);
+			label(fmt(x), px(x), H - 6);
 		}
 		c.textAlign = 'left';
 		c.textBaseline = 'middle';
 		for (let y = Math.ceil(dom.yMin / sty) * sty; y <= dom.yMax; y += sty) {
 			if (Math.abs(y - dom.yMin) < sty * 0.3) continue;
 			c.fillRect(0, py(y) - 0.5, 4, 1);
-			c.fillText(fmt(y), 6, py(y));
+			label(fmt(y), 7, py(y));
 		}
 
 		// known minima

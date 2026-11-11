@@ -84,7 +84,7 @@ export interface Ramp {
  */
 export function makeRamp(theme: 'light' | 'dark'): Ramp {
 	const [L0, L1, C0, C1, H] =
-		theme === 'light' ? [0.975, 0.56, 0.008, 0.05, 255] : [0.205, 0.53, 0.012, 0.055, 255];
+		theme === 'light' ? [0.98, 0.66, 0.006, 0.045, 255] : [0.205, 0.53, 0.012, 0.055, 255];
 	const lut = new Uint8ClampedArray(256 * 3);
 	for (let i = 0; i < 256; i++) {
 		const u = i / 255;
@@ -95,7 +95,7 @@ export function makeRamp(theme: 'light' | 'dark'): Ramp {
 	}
 	return {
 		lut,
-		iso: theme === 'light' ? 'rgba(25, 35, 60, 0.16)' : 'rgba(215, 225, 255, 0.13)'
+		iso: theme === 'light' ? 'rgba(25, 35, 60, 0.14)' : 'rgba(215, 225, 255, 0.13)'
 	};
 }
 

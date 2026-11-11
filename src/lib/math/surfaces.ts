@@ -55,7 +55,7 @@ const quadratic: Surface = {
 	minima: [[0, 0]],
 	fRef: 0,
 	defaultStart: [-5, 2],
-	lr: { sgd: 0.07, adaptive: 0.1 },
+	lr: { sgd: 0.04, adaptive: 0.1 },
 	noise: 0
 };
 

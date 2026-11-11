@@ -90,7 +90,7 @@ function num(s: string | null): number | null {
 export function encode(st: VizState): string {
 	const runs = st.runs
 		.map((r) => {
-			const parts = [r.id];
+			const parts: string[] = [r.id];
 			for (const k of OPTIMIZERS[r.id].hypers) {
 				const v = r.h[k];
 				if (v !== undefined) parts.push(`${SHORT[k]}=${fmt(v)}`);

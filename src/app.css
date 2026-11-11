@@ -1,0 +1,180 @@
+/* ---------- Design tokens ---------- */
+:root {
+	color-scheme: light;
+	--bg: #f6f5f1;
+	--surface: #fbfbfa;
+	--surface-2: #efede7;
+	--border: #dedbd2;
+	--border-strong: #c7c3b8;
+	--text: #15171c;
+	--text-2: #4b505a;
+	--muted: #646a75;
+	--accent: #2a5fd0;
+	--accent-ink: #ffffff;
+	--focus: #2a5fd0;
+	--danger: #b42318;
+	--shadow: 0 1px 2px rgb(20 20 15 / 6%), 0 4px 16px rgb(20 20 15 / 5%);
+
+	/* optimizer identity (validated categorical palette, fixed order) */
+	--c-sgd: #2a78d6;
+	--c-momentum: #eb6834;
+	--c-nesterov: #1baf7a;
+	--c-adagrad: #eda100;
+	--c-rmsprop: #e87ba4;
+	--c-adam: #008300;
+	--c-adamw: #6250d6;
+
+	--font-sans:
+		ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+	--font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
+	--radius: 10px;
+	--radius-sm: 6px;
+	--gutter: clamp(16px, 4vw, 40px);
+	--maxw: 1360px;
+}
+
+:root[data-theme='dark'] {
+	color-scheme: dark;
+	--bg: #0d1015;
+	--surface: #13171e;
+	--surface-2: #1a1f28;
+	--border: #262d39;
+	--border-strong: #354052;
+	--text: #e7eaf0;
+	--text-2: #b7becb;
+	--muted: #8d96a7;
+	--accent: #7aa2ff;
+	--accent-ink: #0d1015;
+	--focus: #9bb8ff;
+	--danger: #ff6b5e;
+	--shadow: 0 1px 2px rgb(0 0 0 / 30%), 0 6px 24px rgb(0 0 0 / 25%);
+
+	--c-sgd: #3987e5;
+	--c-momentum: #d95926;
+	--c-nesterov: #199e70;
+	--c-adagrad: #c98500;
+	--c-rmsprop: #d55181;
+	--c-adam: #008300;
+	--c-adamw: #9085e9;
+}
+
+/* ---------- Base ---------- */
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+html {
+	-webkit-text-size-adjust: 100%;
+	text-size-adjust: 100%;
+}
+
+body {
+	margin: 0;
+	background: var(--bg);
+	color: var(--text);
+	font-family: var(--font-sans);
+	font-size: 15px;
+	line-height: 1.55;
+	-webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+	line-height: 1.2;
+	letter-spacing: -0.015em;
+	margin: 0;
+}
+
+a {
+	color: var(--accent);
+	text-underline-offset: 2px;
+}
+
+:focus-visible {
+	outline: 2px solid var(--focus);
+	outline-offset: 2px;
+	border-radius: 4px;
+}
+
+button,
+input,
+select {
+	font: inherit;
+	color: inherit;
+}
+
+.mono,
+.num {
+	font-family: var(--font-mono);
+	font-variant-numeric: tabular-nums;
+}
+
+.visually-hidden {
+	position: absolute !important;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0 0 0 0);
+	white-space: nowrap;
+	border: 0;
+}
+
+.eyebrow {
+	font-family: var(--font-mono);
+	font-size: 11px;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--muted);
+}
+
+/* ---------- Buttons ---------- */
+.btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	min-height: 36px;
+	padding: 0 12px;
+	border: 1px solid var(--border-strong);
+	border-radius: var(--radius-sm);
+	background: var(--surface);
+	cursor: pointer;
+	font-size: 14px;
+	transition:
+		background 0.12s,
+		border-color 0.12s;
+}
+.btn:hover {
+	background: var(--surface-2);
+}
+.btn:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+.btn.primary {
+	background: var(--accent);
+	border-color: var(--accent);
+	color: var(--accent-ink);
+	font-weight: 600;
+}
+.btn.primary:hover {
+	filter: brightness(1.08);
+}
+.btn.icon {
+	width: 36px;
+	padding: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		transition: none !important;
+		animation: none !important;
+	}
+}

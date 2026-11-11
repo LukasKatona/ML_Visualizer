@@ -4,6 +4,19 @@
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<link rel="icon" href="%sveltekit.assets%/favicon.svg" type="image/svg+xml" />
+		<meta name="theme-color" content="#f6f5f1" media="(prefers-color-scheme: light)" />
+		<meta name="theme-color" content="#0d1015" media="(prefers-color-scheme: dark)" />
+		<script>
+			(function () {
+				var t;
+				try {
+					t = localStorage.getItem('theme');
+				} catch (e) {}
+				if (t !== 'light' && t !== 'dark')
+					t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+				document.documentElement.dataset.theme = t;
+			})();
+		</script>
 		%sveltekit.head%
 	</head>
 	<body data-sveltekit-preload-data="hover">

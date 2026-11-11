@@ -36,6 +36,11 @@ export interface Surface {
 	lr: { sgd: number; adaptive: number };
 	/** Default gradient noise σ (only the stochastic surface uses noise). */
 	noise: number;
+	/**
+	 * A run stops once it leaves the domain expanded by this fraction of its span on each side.
+	 * 0 for the saddle (unbounded below), so the loss gap f − f* stays meaningful.
+	 */
+	escapeMargin: number;
 }
 
 /** Condition number of the ill-conditioned quadratic. */
@@ -56,7 +61,8 @@ const quadratic: Surface = {
 	fRef: 0,
 	defaultStart: [-5, 2],
 	lr: { sgd: 0.04, adaptive: 0.1 },
-	noise: 0
+	noise: 0,
+	escapeMargin: 0.5
 };
 
 const rosenbrock: Surface = {
@@ -79,7 +85,8 @@ const rosenbrock: Surface = {
 	fRef: 0,
 	defaultStart: [-1.5, 2.5],
 	lr: { sgd: 4e-4, adaptive: 0.05 },
-	noise: 0
+	noise: 0,
+	escapeMargin: 0.5
 };
 
 const himmelblau: Surface = {
@@ -108,7 +115,8 @@ const himmelblau: Surface = {
 	fRef: 0,
 	defaultStart: [-0.3, -0.9],
 	lr: { sgd: 0.01, adaptive: 0.1 },
-	noise: 0
+	noise: 0,
+	escapeMargin: 0.5
 };
 
 const beale: Surface = {
@@ -137,7 +145,8 @@ const beale: Surface = {
 	fRef: 0,
 	defaultStart: [0.7, 1.4],
 	lr: { sgd: 1e-3, adaptive: 0.05 },
-	noise: 0
+	noise: 0,
+	escapeMargin: 0.5
 };
 
 const saddle: Surface = {
@@ -155,7 +164,8 @@ const saddle: Surface = {
 	fRef: -4,
 	defaultStart: [-1.9, 1e-3],
 	lr: { sgd: 0.05, adaptive: 0.02 },
-	noise: 0
+	noise: 0,
+	escapeMargin: 0
 };
 
 const NOISY_A = 1;
@@ -175,7 +185,8 @@ const noisy: Surface = {
 	fRef: 0,
 	defaultStart: [-4.2, 2.2],
 	lr: { sgd: 0.05, adaptive: 0.05 },
-	noise: 2
+	noise: 2,
+	escapeMargin: 0.5
 };
 
 export const SURFACES: Record<SurfaceId, Surface> = {
